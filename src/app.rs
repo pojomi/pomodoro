@@ -1,12 +1,20 @@
 // SPDX-License-Identifier: GPL-3.0
 
+use std::ptr::null;
+
 use crate::config::Config;
 use crate::fl;
 use cosmic::cosmic_config::{self, CosmicConfigEntry};
+use cosmic::iced::Alignment::Start;
+use cosmic::iced::alignment::Vertical::Center;
+use cosmic::iced::core::Element;
+use cosmic::iced::core::widget::Tree;
 use cosmic::iced::platform_specific::shell::wayland::commands::popup::{destroy_popup, get_popup};
+use cosmic::iced::widget::Grid;
 use cosmic::iced::{Limits, Subscription, futures, window::Id};
 use cosmic::prelude::*;
-use cosmic::widget;
+use cosmic::widget::grid::widget::Assignment;
+use cosmic::widget::{self, autosize};
 use futures::SinkExt;
 
 /// The application model stores app-specific state used to describe its interface and
@@ -90,7 +98,7 @@ impl cosmic::Application for AppModel {
     /// The applet's button in the panel will be drawn using the main view method.
     /// This view should emit messages to toggle the applet's popup window, which will
     /// be drawn using the `view_window` method.
-    fn view(&self) -> Element<'_, Self::Message> {
+    fn view(&self) -> Element<'_, Self::Message, Theme, Renderer> {
         self.core
             .applet
             .icon_button("display-symbolic")
@@ -101,11 +109,19 @@ impl cosmic::Application for AppModel {
     /// The applet's popup window will be drawn using this view method. If there are
     /// multiple poups, you may match the id parameter to determine which popup to
     /// create a view for.
-    fn view_window(&self, _id: Id) -> Element<'_, Self::Message> {
-        let content_list =
-            widget::list_column().add(widget::settings::item("Timer: ", widget::text("25:00")));
-
-        self.core.applet.popup_container(content_list).into()
+    fn view_window(&self, _id: Id) -> Element<'_, Self::Message, Theme, Renderer> {
+        let r: cosmic::widget::Column<'_, Message, Theme, Renderer> =
+            widget::Column::with_capacity(3)
+                .push(
+                    widget::Row::with_capacity(3)
+                        .push(widget::text("Timer: "))
+                        .push(widget::text("25:00"))
+                        .push(widget::icon::from_name("list-add").apply(widget::button::icon))
+                        .push(widget::icon::from_name("list-remove").apply(widget::button::icon))
+                        .align_y(Center),
+                )
+                .push(widget::text("foo"));
+        self.core.applet.popup_container(r).into()
     }
 
     /// Register subscriptions for this application.
