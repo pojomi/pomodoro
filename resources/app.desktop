@@ -2,7 +2,7 @@
 Name=Pomodoro
 Comment=Pomodoro timer applet for Cosmic Desktop Panel (top bar)
 Type=Application
-Icon=com.github.pojomi.pomodoro
+Icon=alarm-symbolic
 Exec=pomodoro %F
 Terminal=false
 StartupNotify=true

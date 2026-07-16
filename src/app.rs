@@ -1,21 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0
 
-use std::ptr::null;
-
-use crate::config::Config;
-use crate::fl;
-use cosmic::cosmic_config::{self, CosmicConfigEntry};
-use cosmic::iced::Alignment::Start;
-use cosmic::iced::alignment::Vertical::Center;
-use cosmic::iced::core::Element;
-use cosmic::iced::core::widget::Tree;
+use cosmic::Element;
+use cosmic::iced::Alignment::Center;
 use cosmic::iced::platform_specific::shell::wayland::commands::popup::{destroy_popup, get_popup};
-use cosmic::iced::widget::Grid;
-use cosmic::iced::{Limits, Subscription, futures, window::Id};
+use cosmic::iced::widget::{column, row};
+use cosmic::iced::{Limits, Subscription, window::Id};
 use cosmic::prelude::*;
-use cosmic::widget::grid::widget::Assignment;
-use cosmic::widget::{self, autosize};
-use futures::SinkExt;
+use cosmic::widget;
+use cosmic::widget::text;
+use std::time::Duration;
 
 /// The application model stores app-specific state used to describe its interface and
 /// drive its logic.
@@ -25,10 +18,12 @@ pub struct AppModel {
     core: cosmic::Core,
     /// The popup id.
     popup: Option<Id>,
-    /// Configuration data that persists between application runs.
-    config: Config,
     /// Example row toggler.
-    example_row: bool,
+    intervals: u32,
+    timer_value: u32,
+    break_value: u32,
+    remaining: u32,
+    running: bool,
 }
 
 /// Messages emitted by the application and its widgets.
@@ -36,9 +31,15 @@ pub struct AppModel {
 pub enum Message {
     TogglePopup,
     PopupClosed(Id),
-    SubscriptionChannel,
-    UpdateConfig(Config),
-    ToggleExampleRow(bool),
+    Increment,
+    Decrement,
+    IncrementBreak,
+    DecrementBreak,
+    IncrementInterval,
+    DecrementInterval,
+    StartTimer,
+    StopTimer,
+    Tick,
 }
 
 /// Create a COSMIC application from the app model
@@ -71,18 +72,11 @@ impl cosmic::Application for AppModel {
         // Construct the app model with the runtime's core.
         let app = AppModel {
             core,
-            config: cosmic_config::Config::new(Self::APP_ID, Config::VERSION)
-                .map(|context| match Config::get_entry(&context) {
-                    Ok(config) => config,
-                    Err((_errors, config)) => {
-                        // for why in errors {
-                        //     tracing::error!(%why, "error loading app config");
-                        // }
-
-                        config
-                    }
-                })
-                .unwrap_or_default(),
+            timer_value: 25,
+            break_value: 5,
+            remaining: 25,
+            running: false,
+            intervals: 4,
             ..Default::default()
         };
 
@@ -98,10 +92,10 @@ impl cosmic::Application for AppModel {
     /// The applet's button in the panel will be drawn using the main view method.
     /// This view should emit messages to toggle the applet's popup window, which will
     /// be drawn using the `view_window` method.
-    fn view(&self) -> Element<'_, Self::Message, Theme, Renderer> {
+    fn view(&self) -> Element<'_, Self::Message> {
         self.core
             .applet
-            .icon_button("display-symbolic")
+            .icon_button("alarm-symbolic")
             .on_press(Message::TogglePopup)
             .into()
     }
@@ -109,69 +103,117 @@ impl cosmic::Application for AppModel {
     /// The applet's popup window will be drawn using this view method. If there are
     /// multiple poups, you may match the id parameter to determine which popup to
     /// create a view for.
-    fn view_window(&self, _id: Id) -> Element<'_, Self::Message, Theme, Renderer> {
-        let r: cosmic::widget::Column<'_, Message, Theme, Renderer> =
-            widget::Column::with_capacity(3)
-                .push(
-                    widget::Row::with_capacity(3)
-                        .push(widget::text("Timer: "))
-                        .push(widget::text("25:00"))
-                        .push(widget::icon::from_name("list-add").apply(widget::button::icon))
-                        .push(widget::icon::from_name("list-remove").apply(widget::button::icon))
-                        .align_y(Center),
-                )
-                .push(widget::text("foo"));
-        self.core.applet.popup_container(r).into()
+
+    fn view_window(&self, _id: Id) -> Element<'_, Self::Message> {
+        let content = column![
+            row![
+                widget::icon::from_name("value-decrease-symbolic")
+                    .size(16)
+                    .apply(widget::button::icon)
+                    .on_press(Message::Decrement),
+                text(format!("{:02}:00", self.timer_value)),
+                widget::icon::from_name("value-increase-symbolic")
+                    .size(16)
+                    .apply(widget::button::icon)
+                    .on_press(Message::Increment)
+            ]
+            .spacing(8)
+            .align_y(Center),
+            row![
+                widget::icon::from_name("value-decrease-symbolic")
+                    .size(16)
+                    .apply(widget::button::icon)
+                    .on_press(Message::DecrementBreak),
+                text(format!("{:02}:00", self.break_value)),
+                widget::icon::from_name("value-increase-symbolic")
+                    .size(16)
+                    .apply(widget::button::icon)
+                    .on_press(Message::IncrementBreak)
+            ]
+            .spacing(8)
+            .align_y(Center),
+            row![
+                widget::icon::from_name("value-decrease-symbolic")
+                    .size(16)
+                    .apply(widget::button::icon)
+                    .on_press(Message::DecrementInterval),
+                text(format!("Interval: {}", self.intervals)),
+                widget::icon::from_name("value-increase-symbolic")
+                    .size(16)
+                    .apply(widget::button::icon)
+                    .on_press(Message::IncrementInterval)
+            ]
+            .spacing(8)
+            .align_y(Center),
+            row![
+                widget::icon::from_name("media-playback-stop-symbolic")
+                    .size(16)
+                    .apply(widget::button::icon)
+                    .on_press(Message::StopTimer),
+                widget::icon::from_name("media-playback-start-symbolic")
+                    .size(16)
+                    .apply(widget::button::icon)
+                    .on_press(Message::StartTimer),
+            ]
+            .spacing(8)
+            .align_y(Center),
+            text(format!(
+                "{:02}:{:02}",
+                self.remaining / 60,
+                self.remaining % 60
+            ))
+        ]
+        .spacing(8)
+        .padding(8)
+        .align_x(Center);
+        self.core.applet.popup_container(content).into()
     }
 
-    /// Register subscriptions for this application.
-    ///
-    /// Subscriptions are long-lived async tasks running in the background which
-    /// emit messages to the application through a channel. They may be conditionally
-    /// activated by selectively appending to the subscription batch, and will
-    /// continue to execute for the duration that they remain in the batch.
     fn subscription(&self) -> Subscription<Self::Message> {
-        struct MySubscription;
-
-        Subscription::batch(vec![
-            // Create a subscription which emits updates through a channel.
-            Subscription::run(|| {
-                cosmic::iced::stream::channel(
-                    4,
-                    move |mut channel: futures::channel::mpsc::Sender<_>| async move {
-                        _ = channel.send(Message::SubscriptionChannel).await;
-
-                        futures::future::pending().await
-                    },
-                )
-            }),
-            // Watch for application configuration changes.
-            self.core()
-                .watch_config::<Config>(Self::APP_ID)
-                .map(|update| {
-                    // for why in update.errors {
-                    //     tracing::error!(?why, "app config error");
-                    // }
-
-                    Message::UpdateConfig(update.config)
-                }),
-        ])
+        if self.running {
+            cosmic::iced::time::every(Duration::from_secs(1)).map(|_| Message::Tick)
+        } else {
+            Subscription::none()
+        }
     }
 
-    /// Handles messages emitted by the application and its widgets.
-    ///
-    /// Tasks may be returned for asynchronous execution of code in the background
-    /// on the application's async runtime. The application will not exit until all
-    /// tasks are finished.
     fn update(&mut self, message: Self::Message) -> Task<cosmic::Action<Self::Message>> {
         match message {
-            Message::SubscriptionChannel => {
-                // For example purposes only.
+            Message::Increment => self.timer_value += 1,
+            Message::Decrement => {
+                if self.timer_value > 0 {
+                    self.timer_value -= 1;
+                }
             }
-            Message::UpdateConfig(config) => {
-                self.config = config;
+            Message::IncrementBreak => self.break_value += 1,
+            Message::DecrementBreak => {
+                if self.break_value > 0 {
+                    self.break_value -= 1;
+                }
             }
-            Message::ToggleExampleRow(toggled) => self.example_row = toggled,
+            Message::IncrementInterval => self.intervals += 1,
+            Message::DecrementInterval => {
+                if self.intervals > 1 {
+                    self.intervals -= 1;
+                }
+            }
+            Message::StopTimer => {
+                if self.running {
+                    self.running = false;
+                    notify(false);
+                }
+            }
+            Message::StartTimer => {
+                self.remaining = self.timer_value * 60;
+                self.running = true;
+            }
+            Message::Tick => {
+                self.remaining -= 1;
+                if self.remaining == 0 {
+                    self.running = false;
+                    notify(true);
+                }
+            }
             Message::TogglePopup => {
                 return if let Some(p) = self.popup.take() {
                     destroy_popup(p)
@@ -204,5 +246,20 @@ impl cosmic::Application for AppModel {
 
     fn style(&self) -> Option<cosmic::iced::theme::Style> {
         Some(cosmic::applet::style())
+    }
+}
+fn notify(completed: bool) {
+    if completed {
+        let _ = notify_rust::Notification::new()
+            .summary("Timer finished")
+            .body("Time's up!")
+            .icon("alarm-symbolic")
+            .show();
+    } else {
+        let _ = notify_rust::Notification::new()
+            .summary("Timer stopped")
+            .body("The timer was stopped")
+            .icon("alarm-symbolic")
+            .show();
     }
 }
