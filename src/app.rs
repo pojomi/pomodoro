@@ -22,7 +22,9 @@ pub struct AppModel {
     intervals: u32,
     current_interval: u32,
     timer_value: u32,
+    timer_label: String,
     break_value: u32,
+    break_label: String,
     break_count: u32,
     current_break: u32,
     on_break: bool,
@@ -35,6 +37,8 @@ pub struct AppModel {
 #[derive(Debug, Clone)]
 pub enum Message {
     TogglePopup,
+    TimerChanged(String),
+    BreakChanged(String),
     PopupClosed(Id),
     Increment,
     Decrement,
@@ -119,12 +123,19 @@ impl cosmic::Application for AppModel {
         let content: widget::Column<'_, Message, Theme>;
         if !self.running && !self.paused {
             content = column![
+                // Timer
                 row![
                     widget::icon::from_name("value-decrease-symbolic")
                         .size(16)
                         .apply(widget::button::icon)
                         .on_press(Message::Decrement),
-                    text(format!("{:02}:00", self.timer_value)),
+                    widget::inline_input("MM", format!("{:02}", self.timer_value))
+                        .size(16)
+                        .width(18)
+                        .padding(0)
+                        .on_input(|s| Message::TimerChanged(s))
+                        .select_on_focus(true),
+                    text(":00").size(16),
                     widget::icon::from_name("value-increase-symbolic")
                         .size(16)
                         .apply(widget::button::icon)
@@ -132,12 +143,19 @@ impl cosmic::Application for AppModel {
                 ]
                 .spacing(8)
                 .align_y(Center),
+                // Break Timer
                 row![
                     widget::icon::from_name("value-decrease-symbolic")
                         .size(16)
                         .apply(widget::button::icon)
                         .on_press(Message::DecrementBreak),
-                    text(format!("{:02}:00", self.break_value)),
+                    widget::inline_input("MM", format!("{:02}", self.break_value))
+                        .size(16)
+                        .width(18)
+                        .padding(0)
+                        .on_input(|s| Message::BreakChanged(s))
+                        .select_on_focus(true),
+                    text(":00").size(16),
                     widget::icon::from_name("value-increase-symbolic")
                         .size(16)
                         .apply(widget::button::icon)
@@ -145,6 +163,7 @@ impl cosmic::Application for AppModel {
                 ]
                 .spacing(8)
                 .align_y(Center),
+                // Interval Count
                 row![
                     widget::icon::from_name("value-decrease-symbolic")
                         .size(16)
@@ -158,16 +177,18 @@ impl cosmic::Application for AppModel {
                 ]
                 .spacing(8)
                 .align_y(Center),
+                // Start Button
                 widget::icon::from_name("media-playback-start-symbolic")
                     .size(16)
                     .apply(widget::button::icon)
-                    .on_press(Message::StartTimer)
+                    .on_press(Message::StartTimer),
             ]
             .spacing(8)
             .padding(8)
             .align_x(Center);
         } else {
             content = column![
+                // Stop/Pause, Running timer, interval tracker
                 row![
                     widget::icon::from_name("media-playback-stop-symbolic")
                         .size(16)
@@ -189,7 +210,17 @@ impl cosmic::Application for AppModel {
                         self.remaining / 60,
                         self.remaining % 60
                     )),
-                    text(format!("{} of {}", self.current_interval, self.intervals))
+                    if self.running && !self.on_break {
+                        text(format!(
+                            "Interval {} of {}",
+                            self.current_interval, self.intervals
+                        ))
+                    } else {
+                        text(format!(
+                            "Break {} of {}",
+                            self.current_break, self.break_count
+                        ))
+                    },
                 ]
                 .spacing(8)
                 .align_y(Center)
@@ -212,16 +243,39 @@ impl cosmic::Application for AppModel {
 
     fn update(&mut self, message: Self::Message) -> Task<cosmic::Action<Self::Message>> {
         match message {
-            Message::Increment => self.timer_value += 1,
+            Message::TimerChanged(s) => {
+                let checker = s.parse::<i32>();
+                self.timer_label = s;
+                if checker.is_ok_and(|c| c >= 0 && c <= 60) {
+                    self.timer_value = self.timer_label.parse().unwrap();
+                    self.remaining = self.timer_value;
+                }
+            }
+            Message::BreakChanged(s) => {
+                let checker = s.parse::<i32>();
+                self.break_label = s;
+                if checker.is_ok_and(|c| c >= 0 && c <= 60) {
+                    self.break_value = self.break_label.parse().unwrap();
+                }
+            }
+            Message::Increment => {
+                self.timer_value += 1;
+                self.timer_label = format!("{:02}", self.timer_value);
+            }
             Message::Decrement => {
                 if self.timer_value > 1 {
                     self.timer_value -= 1;
+                    self.timer_label = format!("{:02}", self.timer_value);
                 }
             }
-            Message::IncrementBreak => self.break_value += 1,
+            Message::IncrementBreak => {
+                self.break_value += 1;
+                self.break_label = format!("{:02}", self.break_value);
+            }
             Message::DecrementBreak => {
                 if self.break_value > 1 {
                     self.break_value -= 1;
+                    self.break_label = format!("{:02}", self.break_value);
                 }
             }
             Message::IncrementInterval => {
