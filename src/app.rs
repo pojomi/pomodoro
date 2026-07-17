@@ -214,13 +214,13 @@ impl cosmic::Application for AppModel {
         match message {
             Message::Increment => self.timer_value += 1,
             Message::Decrement => {
-                if self.timer_value > 0 {
+                if self.timer_value > 1 {
                     self.timer_value -= 1;
                 }
             }
             Message::IncrementBreak => self.break_value += 1,
             Message::DecrementBreak => {
-                if self.break_value > 0 {
+                if self.break_value > 1 {
                     self.break_value -= 1;
                 }
             }
