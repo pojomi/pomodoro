@@ -7,7 +7,7 @@ use cosmic::iced::widget::{column, row};
 use cosmic::iced::{Limits, Subscription, window::Id};
 use cosmic::prelude::*;
 use cosmic::widget;
-use cosmic::widget::{TextInput, text};
+use cosmic::widget::text;
 use std::time::Duration;
 
 /// The application model stores app-specific state used to describe its interface and
@@ -28,6 +28,7 @@ pub struct AppModel {
     on_break: bool,
     remaining: u32,
     running: bool,
+    paused: bool,
 }
 
 /// Messages emitted by the application and its widgets.
@@ -42,6 +43,7 @@ pub enum Message {
     IncrementInterval,
     DecrementInterval,
     StartTimer,
+    PauseTimer,
     StopTimer,
     Tick,
 }
@@ -80,6 +82,7 @@ impl cosmic::Application for AppModel {
             break_value: 5,
             remaining: 25,
             running: false,
+            paused: false,
             intervals: 4,
             current_interval: 0,
             break_count: 3,
@@ -113,68 +116,89 @@ impl cosmic::Application for AppModel {
     /// create a view for.
 
     fn view_window(&self, _id: Id) -> Element<'_, Self::Message> {
-        let content = column![
-            row![
-                widget::icon::from_name("value-decrease-symbolic")
-                    .size(16)
-                    .apply(widget::button::icon)
-                    .on_press(Message::Decrement),
-                text(format!("{:02}:00", self.timer_value)),
-                widget::icon::from_name("value-increase-symbolic")
-                    .size(16)
-                    .apply(widget::button::icon)
-                    .on_press(Message::Increment),
-            ]
-            .spacing(8)
-            .align_y(Center),
-            row![
-                widget::icon::from_name("value-decrease-symbolic")
-                    .size(16)
-                    .apply(widget::button::icon)
-                    .on_press(Message::DecrementBreak),
-                text(format!("{:02}:00", self.break_value)),
-                widget::icon::from_name("value-increase-symbolic")
-                    .size(16)
-                    .apply(widget::button::icon)
-                    .on_press(Message::IncrementBreak)
-            ]
-            .spacing(8)
-            .align_y(Center),
-            row![
-                widget::icon::from_name("value-decrease-symbolic")
-                    .size(16)
-                    .apply(widget::button::icon)
-                    .on_press(Message::DecrementInterval),
-                text(format!("Interval: {}", self.intervals)),
-                widget::icon::from_name("value-increase-symbolic")
-                    .size(16)
-                    .apply(widget::button::icon)
-                    .on_press(Message::IncrementInterval)
-            ]
-            .spacing(8)
-            .align_y(Center),
-            row![
-                widget::icon::from_name("media-playback-stop-symbolic")
-                    .size(16)
-                    .apply(widget::button::icon)
-                    .on_press(Message::StopTimer),
+        let content: widget::Column<'_, Message, Theme>;
+        if !self.running && !self.paused {
+            content = column![
+                row![
+                    widget::icon::from_name("value-decrease-symbolic")
+                        .size(16)
+                        .apply(widget::button::icon)
+                        .on_press(Message::Decrement),
+                    text(format!("{:02}:00", self.timer_value)),
+                    widget::icon::from_name("value-increase-symbolic")
+                        .size(16)
+                        .apply(widget::button::icon)
+                        .on_press(Message::Increment)
+                ]
+                .spacing(8)
+                .align_y(Center),
+                row![
+                    widget::icon::from_name("value-decrease-symbolic")
+                        .size(16)
+                        .apply(widget::button::icon)
+                        .on_press(Message::DecrementBreak),
+                    text(format!("{:02}:00", self.break_value)),
+                    widget::icon::from_name("value-increase-symbolic")
+                        .size(16)
+                        .apply(widget::button::icon)
+                        .on_press(Message::IncrementBreak)
+                ]
+                .spacing(8)
+                .align_y(Center),
+                row![
+                    widget::icon::from_name("value-decrease-symbolic")
+                        .size(16)
+                        .apply(widget::button::icon)
+                        .on_press(Message::DecrementInterval),
+                    text(format!("Interval: {}", self.intervals)),
+                    widget::icon::from_name("value-increase-symbolic")
+                        .size(16)
+                        .apply(widget::button::icon)
+                        .on_press(Message::IncrementInterval)
+                ]
+                .spacing(8)
+                .align_y(Center),
                 widget::icon::from_name("media-playback-start-symbolic")
                     .size(16)
                     .apply(widget::button::icon)
-                    .on_press(Message::StartTimer),
+                    .on_press(Message::StartTimer)
             ]
             .spacing(8)
-            .align_y(Center),
-            text(format!(
-                "{:02}:{:02}",
-                self.remaining / 60,
-                self.remaining % 60
-            )),
-            text(format!("{} of {}", self.current_interval, self.intervals))
-        ]
-        .spacing(8)
-        .padding(8)
-        .align_x(Center);
+            .padding(8)
+            .align_x(Center);
+        } else {
+            content = column![
+                row![
+                    widget::icon::from_name("media-playback-stop-symbolic")
+                        .size(16)
+                        .apply(widget::button::icon)
+                        .on_press(Message::StopTimer),
+                    if !self.paused {
+                        widget::icon::from_name("media-playback-pause-symbolic")
+                            .size(16)
+                            .apply(widget::button::icon)
+                            .on_press(Message::PauseTimer)
+                    } else {
+                        widget::icon::from_name("media-playback-start-symbolic")
+                            .size(16)
+                            .apply(widget::button::icon)
+                            .on_press(Message::StartTimer)
+                    },
+                    text(format!(
+                        "{:02}:{:02}",
+                        self.remaining / 60,
+                        self.remaining % 60
+                    )),
+                    text(format!("{} of {}", self.current_interval, self.intervals))
+                ]
+                .spacing(8)
+                .align_y(Center)
+            ]
+            .spacing(8)
+            .padding(8)
+            .align_x(Center);
+        }
+
         self.core.applet.popup_container(content).into()
     }
 
@@ -211,15 +235,27 @@ impl cosmic::Application for AppModel {
                 }
             }
             Message::StopTimer => {
-                if self.running {
+                if self.running || self.paused {
                     self.running = false;
+                    self.paused = false;
+                    self.current_interval = 0;
+                    self.current_break = 0;
                     notify_done(false);
                 }
             }
             Message::StartTimer => {
-                self.remaining = self.timer_value * 60;
-                self.current_interval += 1;
+                if !self.paused {
+                    self.remaining = self.timer_value * 60;
+                    self.current_interval += 1;
+                }
+                if self.paused {
+                    self.paused = false;
+                }
                 self.running = true;
+            }
+            Message::PauseTimer => {
+                self.paused = true;
+                self.running = false;
             }
             Message::Tick => {
                 self.remaining -= 1;
