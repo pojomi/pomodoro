@@ -7,7 +7,7 @@ use cosmic::iced::widget::{column, row};
 use cosmic::iced::{Limits, Subscription, window::Id};
 use cosmic::prelude::*;
 use cosmic::widget;
-use cosmic::widget::text;
+use cosmic::widget::{TextInput, text};
 use std::time::Duration;
 
 /// The application model stores app-specific state used to describe its interface and
@@ -20,8 +20,12 @@ pub struct AppModel {
     popup: Option<Id>,
     /// Example row toggler.
     intervals: u32,
+    current_interval: u32,
     timer_value: u32,
     break_value: u32,
+    break_count: u32,
+    current_break: u32,
+    on_break: bool,
     remaining: u32,
     running: bool,
 }
@@ -77,6 +81,10 @@ impl cosmic::Application for AppModel {
             remaining: 25,
             running: false,
             intervals: 4,
+            current_interval: 0,
+            break_count: 3,
+            current_break: 0,
+            on_break: false,
             ..Default::default()
         };
 
@@ -115,7 +123,7 @@ impl cosmic::Application for AppModel {
                 widget::icon::from_name("value-increase-symbolic")
                     .size(16)
                     .apply(widget::button::icon)
-                    .on_press(Message::Increment)
+                    .on_press(Message::Increment),
             ]
             .spacing(8)
             .align_y(Center),
@@ -161,7 +169,8 @@ impl cosmic::Application for AppModel {
                 "{:02}:{:02}",
                 self.remaining / 60,
                 self.remaining % 60
-            ))
+            )),
+            text(format!("{} of {}", self.current_interval, self.intervals))
         ]
         .spacing(8)
         .padding(8)
@@ -191,27 +200,46 @@ impl cosmic::Application for AppModel {
                     self.break_value -= 1;
                 }
             }
-            Message::IncrementInterval => self.intervals += 1,
+            Message::IncrementInterval => {
+                self.intervals += 1;
+                self.break_count += 1;
+            }
             Message::DecrementInterval => {
                 if self.intervals > 1 {
                     self.intervals -= 1;
+                    self.break_count -= 1;
                 }
             }
             Message::StopTimer => {
                 if self.running {
                     self.running = false;
-                    notify(false);
+                    notify_done(false);
                 }
             }
             Message::StartTimer => {
                 self.remaining = self.timer_value * 60;
+                self.current_interval += 1;
                 self.running = true;
             }
             Message::Tick => {
                 self.remaining -= 1;
                 if self.remaining == 0 {
-                    self.running = false;
-                    notify(true);
+                    if self.current_interval == self.intervals {
+                        self.running = false;
+                        notify_done(true);
+                    } else {
+                        if !self.on_break {
+                            self.on_break = true;
+                            self.current_break += 1;
+                            self.remaining = self.break_value * 60;
+                            notify_break(self.current_break, self.break_count);
+                        } else {
+                            self.on_break = false;
+                            self.remaining = self.timer_value * 60;
+                            self.current_interval += 1;
+                            notify_next(self.current_interval, self.intervals);
+                        }
+                    }
                 }
             }
             Message::TogglePopup => {
@@ -248,7 +276,23 @@ impl cosmic::Application for AppModel {
         Some(cosmic::applet::style())
     }
 }
-fn notify(completed: bool) {
+fn notify_break(current_break: u32, breaks: u32) {
+    let _ = notify_rust::Notification::new()
+        .summary("Begin break")
+        .body(format!("Break {} of {}", current_break, breaks).as_str())
+        .icon("alarm-symbolic")
+        .show();
+}
+
+fn notify_next(current_interval: u32, total_intervals: u32) {
+    let _ = notify_rust::Notification::new()
+        .summary("Begin next interval")
+        .body(format!("Interval {} of {}", current_interval, total_intervals).as_str())
+        .icon("alarm-symbolic")
+        .show();
+}
+
+fn notify_done(completed: bool) {
     if completed {
         let _ = notify_rust::Notification::new()
             .summary("Timer finished")
