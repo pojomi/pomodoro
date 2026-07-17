@@ -20,6 +20,7 @@ pub struct AppModel {
     popup: Option<Id>,
     /// Example row toggler.
     intervals: u32,
+    interval_label: String,
     current_interval: u32,
     timer_value: u32,
     timer_label: String,
@@ -39,6 +40,7 @@ pub enum Message {
     TogglePopup,
     TimerChanged(String),
     BreakChanged(String),
+    IntervalChanged(String),
     PopupClosed(Id),
     Increment,
     Decrement,
@@ -82,16 +84,17 @@ impl cosmic::Application for AppModel {
         // Construct the app model with the runtime's core.
         let app = AppModel {
             core,
-            timer_value: 25,
-            break_value: 5,
-            remaining: 25,
             running: false,
             paused: false,
-            intervals: 4,
             current_interval: 0,
-            break_count: 3,
             current_break: 0,
             on_break: false,
+            timer_value: 25,
+            break_value: 25,
+            intervals: 3,
+            timer_label: format!("25"),
+            break_label: format!("5"),
+            interval_label: format!("3"),
             ..Default::default()
         };
 
@@ -129,12 +132,12 @@ impl cosmic::Application for AppModel {
                         .size(16)
                         .apply(widget::button::icon)
                         .on_press(Message::Decrement),
-                    widget::inline_input("MM", format!("{:02}", self.timer_value))
+                    widget::inline_input("mm", &self.timer_label)
+                        .id("main-timer".into())
                         .size(16)
                         .width(18)
                         .padding(0)
-                        .on_input(|s| Message::TimerChanged(s))
-                        .select_on_focus(true),
+                        .on_input(|s| Message::TimerChanged(s)),
                     text(":00").size(16),
                     widget::icon::from_name("value-increase-symbolic")
                         .size(16)
@@ -149,12 +152,12 @@ impl cosmic::Application for AppModel {
                         .size(16)
                         .apply(widget::button::icon)
                         .on_press(Message::DecrementBreak),
-                    widget::inline_input("MM", format!("{:02}", self.break_value))
+                    widget::inline_input("mm", &self.break_label)
+                        .id("break-timer".into())
                         .size(16)
                         .width(18)
                         .padding(0)
-                        .on_input(|s| Message::BreakChanged(s))
-                        .select_on_focus(true),
+                        .on_input(|s| Message::BreakChanged(s)),
                     text(":00").size(16),
                     widget::icon::from_name("value-increase-symbolic")
                         .size(16)
@@ -169,7 +172,13 @@ impl cosmic::Application for AppModel {
                         .size(16)
                         .apply(widget::button::icon)
                         .on_press(Message::DecrementInterval),
-                    text(format!("Interval: {}", self.intervals)),
+                    widget::inline_input("#", &self.interval_label)
+                        .id("interval".into())
+                        .size(16)
+                        .width(18)
+                        .padding(0)
+                        .on_input(|s| Message::IntervalChanged(s)),
+                    // text(format!("Interval: {}", self.intervals)),
                     widget::icon::from_name("value-increase-symbolic")
                         .size(16)
                         .apply(widget::button::icon)
@@ -244,18 +253,27 @@ impl cosmic::Application for AppModel {
     fn update(&mut self, message: Self::Message) -> Task<cosmic::Action<Self::Message>> {
         match message {
             Message::TimerChanged(s) => {
-                let checker = s.parse::<i32>();
+                let checker = s.parse::<u32>();
                 self.timer_label = s;
-                if checker.is_ok_and(|c| c >= 0 && c <= 60) {
+                if checker.is_ok_and(|c| c <= 60) {
                     self.timer_value = self.timer_label.parse().unwrap();
                     self.remaining = self.timer_value;
+                } else {
+                    self.timer_label = format!("");
                 }
             }
             Message::BreakChanged(s) => {
-                let checker = s.parse::<i32>();
+                let checker = s.parse::<u32>();
                 self.break_label = s;
-                if checker.is_ok_and(|c| c >= 0 && c <= 60) {
+                if checker.is_ok_and(|c| c <= 60) {
                     self.break_value = self.break_label.parse().unwrap();
+                }
+            }
+            Message::IntervalChanged(s) => {
+                let checker = s.parse::<u32>();
+                self.interval_label = s;
+                if checker.is_ok() {
+                    self.intervals = self.interval_label.parse().unwrap();
                 }
             }
             Message::Increment => {
@@ -280,11 +298,13 @@ impl cosmic::Application for AppModel {
             }
             Message::IncrementInterval => {
                 self.intervals += 1;
+                self.interval_label = format!("{}", self.intervals);
                 self.break_count += 1;
             }
             Message::DecrementInterval => {
                 if self.intervals > 1 {
                     self.intervals -= 1;
+                    self.interval_label = format!("{}", self.intervals);
                     self.break_count -= 1;
                 }
             }
