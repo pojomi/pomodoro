@@ -2,6 +2,10 @@
 
 Pomodoro timer applet for Cosmic Desktop Panel (top bar)
 
+![New Timer](./screenshots/screenshot-new-timer.png)
+
+![Running Timer](./screenshots/screenshot-running-timer.png)
+
 ## Installation
 
 A [justfile](./justfile) is included by default for the [casey/just][just] command runner.
