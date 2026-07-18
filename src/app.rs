@@ -2,6 +2,7 @@
 
 use cosmic::Element;
 use cosmic::iced::Alignment::Center;
+use cosmic::iced::Length;
 use cosmic::iced::platform_specific::shell::wayland::commands::popup::{destroy_popup, get_popup};
 use cosmic::iced::widget::{column, row};
 use cosmic::iced::{Limits, Subscription, window::Id};
@@ -90,11 +91,11 @@ impl cosmic::Application for AppModel {
             current_break: 0,
             on_break: false,
             timer_value: 25,
-            break_value: 25,
+            break_value: 5,
             intervals: 3,
-            timer_label: format!("25"),
-            break_label: format!("5"),
-            interval_label: format!("3"),
+            timer_label: format!("{:02}", 25),
+            break_label: format!("{:02}", 5),
+            interval_label: format!("{:02}", 3),
             ..Default::default()
         };
 
@@ -133,7 +134,6 @@ impl cosmic::Application for AppModel {
                         .apply(widget::button::icon)
                         .on_press(Message::Decrement),
                     widget::inline_input("mm", &self.timer_label)
-                        .id("main-timer".into())
                         .size(16)
                         .width(18)
                         .padding(0)
@@ -144,7 +144,8 @@ impl cosmic::Application for AppModel {
                         .apply(widget::button::icon)
                         .on_press(Message::Increment)
                 ]
-                .spacing(8)
+                .width(Length::Shrink)
+                .spacing(2)
                 .align_y(Center),
                 // Break Timer
                 row![
@@ -153,7 +154,6 @@ impl cosmic::Application for AppModel {
                         .apply(widget::button::icon)
                         .on_press(Message::DecrementBreak),
                     widget::inline_input("mm", &self.break_label)
-                        .id("break-timer".into())
                         .size(16)
                         .width(18)
                         .padding(0)
@@ -164,7 +164,8 @@ impl cosmic::Application for AppModel {
                         .apply(widget::button::icon)
                         .on_press(Message::IncrementBreak)
                 ]
-                .spacing(8)
+                .width(Length::Shrink)
+                .spacing(2)
                 .align_y(Center),
                 // Interval Count
                 row![
@@ -173,18 +174,17 @@ impl cosmic::Application for AppModel {
                         .apply(widget::button::icon)
                         .on_press(Message::DecrementInterval),
                     widget::inline_input("#", &self.interval_label)
-                        .id("interval".into())
                         .size(16)
                         .width(18)
                         .padding(0)
                         .on_input(|s| Message::IntervalChanged(s)),
-                    // text(format!("Interval: {}", self.intervals)),
                     widget::icon::from_name("value-increase-symbolic")
                         .size(16)
                         .apply(widget::button::icon)
                         .on_press(Message::IncrementInterval)
                 ]
-                .spacing(8)
+                .width(Length::Shrink)
+                .spacing(2)
                 .align_y(Center),
                 // Start Button
                 widget::icon::from_name("media-playback-start-symbolic")
@@ -219,17 +219,13 @@ impl cosmic::Application for AppModel {
                         self.remaining / 60,
                         self.remaining % 60
                     )),
-                    if self.running && !self.on_break {
-                        text(format!(
-                            "Interval {} of {}",
-                            self.current_interval, self.intervals
-                        ))
+                    text(if self.running {
+                        format!("Interval {} of {}", self.current_interval, self.intervals)
+                    } else if self.on_break && !self.paused {
+                        format!("Break {} of {}", self.current_break, self.break_count)
                     } else {
-                        text(format!(
-                            "Break {} of {}",
-                            self.current_break, self.break_count
-                        ))
-                    },
+                        format!("")
+                    }),
                 ]
                 .spacing(8)
                 .align_y(Center)
@@ -254,26 +250,36 @@ impl cosmic::Application for AppModel {
         match message {
             Message::TimerChanged(s) => {
                 let checker = s.parse::<u32>();
-                self.timer_label = s;
-                if checker.is_ok_and(|c| c <= 60) {
-                    self.timer_value = self.timer_label.parse().unwrap();
-                    self.remaining = self.timer_value;
+                if checker.is_ok() {
+                    let is_valid = checker.unwrap();
+                    if is_valid <= 60 {
+                        self.timer_value = is_valid;
+                        self.timer_label = format!("{:02}", self.timer_value);
+                    }
                 } else {
                     self.timer_label = format!("");
                 }
             }
             Message::BreakChanged(s) => {
                 let checker = s.parse::<u32>();
-                self.break_label = s;
-                if checker.is_ok_and(|c| c <= 60) {
-                    self.break_value = self.break_label.parse().unwrap();
+                if checker.is_ok() {
+                    let is_valid = checker.unwrap();
+                    if is_valid <= 60 {
+                        self.break_value = is_valid;
+                        self.break_label = format!("{:02}", self.break_value);
+                    }
+                } else {
+                    self.break_label = format!("");
                 }
             }
             Message::IntervalChanged(s) => {
                 let checker = s.parse::<u32>();
-                self.interval_label = s;
                 if checker.is_ok() {
-                    self.intervals = self.interval_label.parse().unwrap();
+                    let is_valid = checker.unwrap();
+                    if is_valid <= 99 {
+                        self.intervals = is_valid;
+                        self.interval_label = format!("{:02}", is_valid);
+                    }
                 }
             }
             Message::Increment => {
@@ -297,14 +303,16 @@ impl cosmic::Application for AppModel {
                 }
             }
             Message::IncrementInterval => {
-                self.intervals += 1;
-                self.interval_label = format!("{}", self.intervals);
-                self.break_count += 1;
+                if self.intervals <= 98 {
+                    self.intervals += 1;
+                    self.interval_label = format!("{:02}", self.intervals);
+                    self.break_count += 1;
+                }
             }
             Message::DecrementInterval => {
                 if self.intervals > 1 {
                     self.intervals -= 1;
-                    self.interval_label = format!("{}", self.intervals);
+                    self.interval_label = format!("{:02}", self.intervals);
                     self.break_count -= 1;
                 }
             }

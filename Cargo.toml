@@ -1,6 +1,6 @@
 [package]
 name = "pomodoro"
-version = "0.1.0"
+version = "1.1.0"
 edition = "2024"
 license = "GPL-3.0"
 description = "Pomodoro timer applet for Cosmic Desktop Panel (top bar)"
@@ -20,19 +20,19 @@ features = ["fluent-system", "desktop-requester"]
 git = "https://github.com/pop-os/libcosmic.git"
 # See https://github.com/pop-os/libcosmic/blob/master/Cargo.toml for available features.
 features = [
-    # Applet support
-    "applet",
-    "applet-token",
-    # Uses cosmic-settings-daemon to watch for config file changes
-    "dbus-config",
-    # Support creating additional application windows.
-    "multi-window",
-    # Uses tokio as the executor for the runtime
-    "tokio",
-    # Add Wayland support to winit
-    "wayland",
-    # Windowing support for X11, Windows, Mac, & Redox
-    "winit",
+  # Applet support
+  "applet",
+  "applet-token",
+  # Uses cosmic-settings-daemon to watch for config file changes
+  "dbus-config",
+  # Support creating additional application windows.
+  "multi-window",
+  # Uses tokio as the executor for the runtime
+  "tokio",
+  # Add Wayland support to winit
+  "wayland",
+  # Windowing support for X11, Windows, Mac, & Redox
+  "winit",
 ]
 
 # Uncomment to test a locally-cloned libcosmic
