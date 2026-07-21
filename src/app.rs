@@ -91,7 +91,7 @@ impl cosmic::Application for AppModel {
             current_break: 0,
             on_break: false,
             timer_value: 25,
-            break_value: 5,
+            break_count: 2,
             intervals: 3,
             timer_label: format!("{:02}", 25),
             break_label: format!("{:02}", 5),
@@ -219,7 +219,7 @@ impl cosmic::Application for AppModel {
                         self.remaining / 60,
                         self.remaining % 60
                     )),
-                    text(if self.running {
+                    text(if self.running && !self.on_break {
                         format!("Interval {} of {}", self.current_interval, self.intervals)
                     } else if self.on_break && !self.paused {
                         format!("Break {} of {}", self.current_break, self.break_count)
